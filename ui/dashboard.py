@@ -15,6 +15,7 @@ from kivy.uix.button import Button
 from ui.map_panel import TractorMap
 
 from services.gps import GPSService
+from services.imu import IMUService
 from services.vehicle import VehicleService
 
 
@@ -123,6 +124,7 @@ class TractorDashboard(BoxLayout):
 
 
         self.gps = None
+        self.imu = None
         self.vehicle = None
 
         self.clock_event = None
@@ -445,7 +447,7 @@ class TractorDashboard(BoxLayout):
 
 
         self.heading_label = create_label(
-            text="0°",
+            text="0° N",
             font_size="30sp",
             bold=True
         )
@@ -567,7 +569,13 @@ class TractorDashboard(BoxLayout):
     # ========================================================
 
     def open_menu(self, instance):
-        print("MENÜ GEDRÜCKT", flush=True)
+
+        print(
+            "MENÜ GEDRÜCKT",
+            flush=True
+        )
+
+
         self.app.show_machine_manager()
 
 
@@ -594,6 +602,20 @@ class TractorDashboard(BoxLayout):
 
 
         self.gps.start()
+
+
+        # ----------------------------------------------------
+        # IMU Service
+        # ----------------------------------------------------
+
+        if self.imu is None:
+
+            self.imu = IMUService(
+                callback=self.update_imu
+            )
+
+
+        self.imu.start()
 
 
         # ----------------------------------------------------
@@ -625,6 +647,12 @@ class TractorDashboard(BoxLayout):
         self.services_running = True
 
 
+        print(
+            "Dashboard-Services gestartet.",
+            flush=True
+        )
+
+
     # ========================================================
     # SERVICES STOPPEN
     # ========================================================
@@ -643,6 +671,15 @@ class TractorDashboard(BoxLayout):
         if self.gps is not None:
 
             self.gps.stop()
+
+
+        # ----------------------------------------------------
+        # IMU
+        # ----------------------------------------------------
+
+        if self.imu is not None:
+
+            self.imu.stop()
 
 
         # ----------------------------------------------------
@@ -668,6 +705,12 @@ class TractorDashboard(BoxLayout):
         self.services_running = False
 
 
+        print(
+            "Dashboard-Services gestoppt.",
+            flush=True
+        )
+
+
     # ========================================================
     # GPS DATEN
     # ========================================================
@@ -680,20 +723,22 @@ class TractorDashboard(BoxLayout):
         heading
     ):
 
+        # ----------------------------------------------------
+        # Geschwindigkeit
+        # ----------------------------------------------------
+
         self.speed_label.text = (
             f"{speed:.1f} km/h"
         )
 
 
-        self.heading_label.text = (
-            f"{heading:.0f}°"
-        )
-
+        # ----------------------------------------------------
+        # GPS Status
+        # ----------------------------------------------------
 
         self.gps_status.text = (
             "GPS ● AKTIV"
         )
-
 
         self.gps_status.color = GREEN
 
@@ -710,6 +755,71 @@ class TractorDashboard(BoxLayout):
                 speed,
                 heading
             )
+
+
+    # ========================================================
+    # IMU DATEN
+    # ========================================================
+
+    def update_imu(
+        self,
+        accel_x,
+        accel_y,
+        accel_z,
+        gyro_x,
+        gyro_y,
+        gyro_z,
+        temperature,
+        roll,
+        pitch,
+        yaw
+    ):
+
+        # ----------------------------------------------------
+        # Yaw normalisieren
+        #
+        # Ergebnis immer:
+        #
+        # 0° ... 359°
+        #
+        # ----------------------------------------------------
+
+        heading = yaw % 360.0
+
+
+        # ----------------------------------------------------
+        # Himmelsrichtung bestimmen
+        # ----------------------------------------------------
+
+        directions = [
+            "N",
+            "NO",
+            "O",
+            "SO",
+            "S",
+            "SW",
+            "W",
+            "NW"
+        ]
+
+
+        direction_index = int(
+            (heading + 22.5) / 45.0
+        ) % 8
+
+
+        direction = directions[
+            direction_index
+        ]
+
+
+        # ----------------------------------------------------
+        # Anzeige
+        # ----------------------------------------------------
+
+        self.heading_label.text = (
+            f"{heading:.0f}° {direction}"
+        )
 
 
     # ========================================================
@@ -758,4 +868,3 @@ class TractorDashboard(BoxLayout):
     def cleanup(self):
 
         self.stop_services()
-
